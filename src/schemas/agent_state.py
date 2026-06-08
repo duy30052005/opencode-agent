@@ -1,13 +1,13 @@
 from typing import TypedDict
 from enum import Enum
 
-class Status(Enum, str):
+class Status(str, Enum):
     ERROR = "error"
     SUCCESS = "success"
     PENDING = "pending"
     TIMEOUT = "timeout"
 
-class NodeType(Enum, str):
+class NodeType(str, Enum):
     GENERATOR = "code_generator"
     EXECUTOR = "code_executor"
     ROUTER = "critic_router"
