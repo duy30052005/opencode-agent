@@ -34,8 +34,13 @@ class HistoryEntry(TypedDict):
     timestamp: str
     duration_ms: int
 
+class Metadata(TypedDict):
+    task_id: str
+    timestamp: str
+    version: str
+    llm_model: str
 
-class AgentState(TypedDict):
+class State(TypedDict):
     requirement: str
     code: str | None
     execution_result: ExecutionResult
@@ -43,3 +48,13 @@ class AgentState(TypedDict):
     retry_count: int
     max_retries: int
     history: list[HistoryEntry]
+
+class Action(TypedDict):
+    next_node: str
+    message: str
+    reasoning: str
+
+class AgentState(TypedDict):
+    metadata: Metadata
+    state: State
+    action: Action | None
