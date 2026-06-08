@@ -34,7 +34,7 @@ class CriticRouter(BaseNode):
     else:
       action = {
         'next_node': 'END_FAILURE',
-        'message': 'Agent chưa tìm được giải pháp sau'
+        'message': 'Agent chưa tìm được giải pháp sau '
                     f'{max_retries} lượt thử. Đây là code và lỗi cuối cùng.',
         'reasoning': f'retry_count ({retry_count}) >= max_retries ({max_retries}). Dừng để tránh lãng phí tài nguyên.',
       }
@@ -44,4 +44,4 @@ class CriticRouter(BaseNode):
     end_time = time.perf_counter()
     duration_ms = int((end_time - start_time) * 1000)
     self.write_history(output, state, output, duration_ms= duration_ms)
-    state
+    return output
