@@ -16,10 +16,10 @@ class CodeGenerator(BaseNode):
 
         Please provide the generated code without any explanations or comments. The response should be purely the code that fulfills the requirement."""
 
-        # response = llm.invoke(prompt)
-        response = "```python\ndef sum_list(numbers):\n    return sum(numbers)\n```"
-        # generated_code = response.content
-        generated_code = response
+        response = llm.invoke(prompt)
+        # response = "```python\ndef sum_list(numbers):\n    return sum(numbers)\n```"
+        generated_code = response.content
+        # generated_code = response
 
         new_state = state["state"].copy()
         new_state["code"] = generated_code.split("```python")[1].split("```")[0].strip() if "```python" in generated_code else generated_code.strip()
