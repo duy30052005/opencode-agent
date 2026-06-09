@@ -7,7 +7,7 @@ class BaseNode:
 
     def write_history(self, state: dict, input: dict, output: dict, duration_ms: int) -> dict:
         history_entry = {
-            "attempt": state.get("retry_count", 0) + 1,
+            "attempt": state["state"].get("retry_count", 0) + 1,
             "node": self.NODE_NAME,
             "input": input,
             "output": output,
