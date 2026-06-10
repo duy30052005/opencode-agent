@@ -15,6 +15,7 @@ coverage.xml
 htmlcov/
 .venv/
 venv/
+pytest.ini
 
 # Node / frontend
 node_modules/
