@@ -1,11 +1,29 @@
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from __future__ import annotations
+
+import os
+from pathlib import Path
 
 
-class Settings(BaseSettings):
-    GOOGLE_API_KEY: str = Field(default=...)
+def _load_dotenv(path: str = ".env") -> None:
+    env_path = Path(path)
+    if not env_path.exists():
+        return
 
-    model_config = SettingsConfigDict(env_file=".env")
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+class Settings:
+    def __init__(self) -> None:
+        _load_dotenv()
+        self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
 
 settings = Settings()

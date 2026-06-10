@@ -12,6 +12,7 @@ Không cần network, không cần LLM API key.
 from __future__ import annotations
 
 import pytest
+import src.nodes.node_2_executor as node2_executor
 from src.nodes.node_2_executor import (
     _check_syntax,
     _extract_first_function,
@@ -20,6 +21,16 @@ from src.nodes.node_2_executor import (
     _run_in_subprocess,
     run,
 )
+
+
+class _DisabledLLM:
+    def invoke(self, prompt):
+        raise RuntimeError("LLM disabled in unit tests")
+
+
+@pytest.fixture(autouse=True)
+def disable_real_llm(monkeypatch):
+    monkeypatch.setattr(node2_executor, "llm", _DisabledLLM())
 
 # ---------------------------------------------------------------------------
 # Helper: build a minimal agent state
@@ -163,6 +174,32 @@ class TestRunInSubprocess:
 # ===========================================================================
 
 class TestGenerateTestCases:
+    def test_llm_generated_json_cases_are_used(self, monkeypatch):
+        class _FakeResponse:
+            def __init__(self, content):
+                self.content = content
+
+        class _FakeLLM:
+            def invoke(self, prompt):
+                return _FakeResponse(
+                    """
+                    [
+                        {"input": {"text": "hello"}, "expected_output": 1, "description": "one word"},
+                        {"input": {"text": "hello world"}, "expected_output": 2, "description": "two words"}
+                    ]
+                    """
+                )
+
+        monkeypatch.setattr(node2_executor, "llm", _FakeLLM())
+
+        code = "def count_words(text):\n    return len(text.split())\n"
+        cases = _generate_test_cases("Đếm số từ trong chuỗi", code)
+
+        assert len(cases) == 2
+        assert cases[0]["input"] == {"text": "hello"}
+        assert cases[0]["expected_output"] == 1
+        assert cases[1]["expected_output"] == 2
+
     def test_factorial_pattern(self):
         code = "def factorial(n):\n    return 1 if n <= 1 else n * factorial(n-1)\n"
         cases = _generate_test_cases("Viết hàm tính giai thừa của n", code)

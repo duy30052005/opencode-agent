@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import os
 import re
 import subprocess
@@ -13,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from .base_node import BaseNode
+from ..core.llm_client import llm
 from ..schemas.node_1_schema import Node1Input, Node1Output
 
 TIMEOUT_SECONDS: float = 5.0
@@ -30,6 +32,8 @@ class CodeExecutor(BaseNode):
 
         code: Optional[str] = inner.get("code")
         requirement: str = inner.get("requirement", "")
+        retry_count: int = int(inner.get("retry_count", 0) or 0)
+        execution_result_context: Dict[str, Any] = inner.get("execution_result", {}) or {}
         history: List[Dict[str, Any]] = list(inner.get("history", []))
 
         attempt_number = len(history) + 1
@@ -77,7 +81,12 @@ class CodeExecutor(BaseNode):
                 reasoning=f"SyntaxError: {syntax_error}",
             )
 
-        test_cases = _generate_test_cases(requirement, code)
+        test_cases = _generate_test_cases(
+            requirement,
+            code,
+            retry_count=retry_count,
+            execution_result=execution_result_context,
+        )
         exec_result = _run_in_subprocess(code, timeout=TIMEOUT_SECONDS)
 
         evaluated_tests: List[Dict[str, Any]] = []
@@ -214,7 +223,132 @@ def _run_test_snippet_in_subprocess(
     return res["stdout"], res["stderr"], res["exit_code"]
 
 
-def _generate_test_cases(requirement: str, code: str) -> List[Dict[str, Any]]:
+def _generate_test_cases(
+    requirement: str,
+    code: str,
+    retry_count: int = 0,
+    execution_result: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    fn_info = _extract_first_function(code)
+    if fn_info is None:
+        return []
+
+    fn_name, param_names = fn_info
+    llm_cases = _generate_test_cases_with_llm(
+        requirement=requirement,
+        code=code,
+        fn_name=fn_name,
+        param_names=param_names,
+        retry_count=retry_count,
+        execution_result=execution_result or {},
+    )
+    if llm_cases:
+        return _remap_inputs(llm_cases, param_names)[:5]
+
+    return _generate_rule_based_test_cases(requirement, code)
+
+
+def _generate_test_cases_with_llm(
+    requirement: str,
+    code: str,
+    fn_name: str,
+    param_names: List[str],
+    retry_count: int,
+    execution_result: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    signature = ", ".join(param_names) if param_names else "no parameters"
+    execution_summary = json.dumps(execution_result, ensure_ascii=False, default=str)
+    prompt = f"""You are a strict Python test designer.
+Generate 2 to 5 test cases for the requirement below.
+
+Requirement:
+{requirement}
+
+Function name: {fn_name}
+Parameters: {signature}
+Code:
+```python
+{code}
+```
+
+Retry count: {retry_count}
+Previous execution result JSON:
+{execution_summary}
+
+Rules:
+- Return ONLY valid JSON.
+- Return a JSON array of objects.
+- Each object must have: input, expected_output, description.
+- input must be a JSON object whose keys match the function parameters.
+- expected_output can be a JSON value, or "__EXCEPTION__" if the correct behavior is to raise.
+- Prefer boundary, normal, and edge cases.
+- Use the previous execution result to avoid repeating obviously weak cases when retry_count > 0.
+- Do not include markdown fences, code, or explanations.
+"""
+
+    try:
+        response = llm.invoke(prompt)
+    except Exception:
+        return []
+
+    raw_content = getattr(response, "content", response)
+    return _parse_test_case_payload(raw_content)
+
+
+def _parse_test_case_payload(raw_content: Any) -> List[Dict[str, Any]]:
+    if not raw_content:
+        return []
+
+    text = str(raw_content).strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+
+    start_candidates = [idx for idx in (text.find("["), text.find("{")) if idx != -1]
+    if not start_candidates:
+        return []
+
+    start = min(start_candidates)
+    end = max(text.rfind("]"), text.rfind("}"))
+    if end < start:
+        return []
+
+    json_blob = text[start : end + 1]
+    try:
+        parsed = json.loads(json_blob)
+    except json.JSONDecodeError:
+        return []
+
+    if isinstance(parsed, dict):
+        for key in ("test_cases", "cases", "items"):
+            value = parsed.get(key)
+            if isinstance(value, list):
+                parsed = value
+                break
+
+    if not isinstance(parsed, list):
+        return []
+
+    normalized: List[Dict[str, Any]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        input_data = item.get("input", {})
+        if not isinstance(input_data, dict):
+            continue
+        expected_output = item.get("expected_output", "")
+        normalized.append(
+            {
+                "input": input_data,
+                "expected_output": expected_output,
+                "description": str(item.get("description", "")).strip(),
+            }
+        )
+
+    return normalized[:5]
+
+
+def _generate_rule_based_test_cases(requirement: str, code: str) -> List[Dict[str, Any]]:
     fn_info = _extract_first_function(code)
     if fn_info is None:
         return []
@@ -352,14 +486,22 @@ def _evaluate_test_cases(code: str, test_cases: List[Dict[str, Any]], timeout: f
 
     for tc in test_cases:
         inp: Dict[str, Any] = tc.get("input", {})
-        expected: str = str(tc.get("expected_output", ""))
+        expected = _normalize_expected_output(tc.get("expected_output", ""))
 
         call_args = ", ".join(f"{k}={repr(v)}" for k, v in inp.items())
         snippet = textwrap.dedent(
             f"""\
+            import json as _json
+
             try:
                 _result = {fn_name}({call_args})
-                print(_result)
+                if isinstance(_result, str):
+                    print(_result)
+                else:
+                    try:
+                        print(_json.dumps(_result, ensure_ascii=False, sort_keys=True))
+                    except TypeError:
+                        print(_result)
             except Exception as _e:
                 print(f"EXCEPTION:{{type(_e).__name__}}")
             """
@@ -396,13 +538,53 @@ def _evaluate_test_cases(code: str, test_cases: List[Dict[str, Any]], timeout: f
 
 
 def _outputs_match(actual: str, expected: str) -> bool:
+    if not isinstance(expected, str):
+        actual_json = _try_json_loads(actual)
+        if actual_json is not _JSON_PARSE_FAILED and actual_json == expected:
+            return True
+
     if actual == expected:
         return True
+
+    if not isinstance(expected, str):
+        return False
+
+    expected_json = _try_json_loads(expected)
+    actual_json = _try_json_loads(actual)
+    if expected_json is not _JSON_PARSE_FAILED and actual_json is not _JSON_PARSE_FAILED:
+        if actual_json == expected_json:
+            return True
+
     try:
         return abs(float(actual) - float(expected)) < 1e-9
     except (ValueError, TypeError):
         pass
     return actual.lower() == expected.lower()
+
+
+_JSON_PARSE_FAILED = object()
+
+
+def _try_json_loads(value: str) -> Any:
+    try:
+        return json.loads(value)
+    except Exception:
+        return _JSON_PARSE_FAILED
+
+
+def _normalize_expected_output(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+
+    stripped = value.strip()
+    if stripped in {"__EXCEPTION__", "__EXPECT_ERROR__"}:
+        return stripped
+
+    parsed = _try_json_loads(stripped)
+    if parsed is not _JSON_PARSE_FAILED:
+        return parsed
+
+    return value
 
 
 def _build_execution_result(
