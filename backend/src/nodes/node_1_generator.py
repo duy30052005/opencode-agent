@@ -49,10 +49,16 @@ class CodeGenerator(BaseNode):
         prompt = f"""You are a helpful assistant that generates Python code based on the given requirement.
         Requirement: {requirement}
 
-        Please provide the generated code without any explanations or comments. The response should be purely the code that fulfills the requirement."""
+        Please provide the generated code without any explanations or comments. The response should be purely the code that fulfills the requirement.
+        CRITICAL RULES FOR AUTO-TESTING:
+        1. You MUST write a function that takes arguments and uses 'return' to output the result.
+        2. DO NOT use the `input()` function anywhere in your code.
+        3. DO NOT use `print()` for the final output (use 'return' instead).
+        4. DO NOT include test blocks like `if __name__ == '__main__':`.
+        5. Only output the raw python code for the function(s)."""
 
-        # response = llm_client.llm.invoke(prompt)
-        response = llm_client.groq.invoke(prompt)
+        response = llm_client.llm.invoke(prompt)
+        # response = llm_client.groq.invoke(prompt)
         return response.content
 
     def _fix_code(self, requirement: str, code: str | None, stderr: str | None) -> dict:
@@ -64,10 +70,16 @@ class CodeGenerator(BaseNode):
             ```
             Error Message: {stderr}
 
-            Please provide the revised code without any explanations or comments. The response should be purely the code that fulfills the requirement and resolves the errors."""
+            Please provide the revised code without any explanations or comments. The response should be purely the code that fulfills the requirement and resolves the errors.
+            CRITICAL RULES FOR AUTO-TESTING:
+            1. You MUST write a function that takes arguments and uses 'return' to output the result.
+            2. DO NOT use the `input()` function anywhere in your code.
+            3. DO NOT use `print()` for the final output (use 'return' instead).
+            4. DO NOT include test blocks like `if __name__ == '__main__':`.
+            5. Only output the raw python code for the function(s)."""
 
-            # response = llm_client.llm.invoke(prompt)
-            response = llm_client.groq.invoke(prompt)
+            response = llm_client.llm.invoke(prompt)
+            # response = llm_client.groq.invoke(prompt)
             revised_code = response.content
             return revised_code
         else:

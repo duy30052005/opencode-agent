@@ -62,7 +62,7 @@ def run_agent(requirement: str):
     print("\n[INFO] Đã xuất toàn bộ chi tiết state vào file 'debug_last_run.json'.")
 
 if __name__ == "__main__":
-    run_agent("Viết hàm tìm số nguyên tố từ 1 đến n")
+    run_agent("Viết toàn bộ chương trình tìm số nguyên tố từ 1 đến n trong 1 hàm main")
     
     # Bạn có thể thử thêm các test case khó hơn, ví dụ: 
     # run_agent("Viết hàm chia hai số a và b")
