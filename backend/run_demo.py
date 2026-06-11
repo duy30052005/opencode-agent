@@ -1,9 +1,24 @@
 import uuid
 import json
+import random
+import sys
 from datetime import datetime, timezone
 
 # Import đồ thị từ phần thư mục src
 from src.core.workflow import app
+
+
+DEMO_REQUIREMENTS = [
+    "Viết hàm tìm số nguyên tố từ 1 đến n",
+    "Viết hàm tính giai thừa của n",
+    "Viết hàm kiểm tra chuỗi palindrome",
+    "Viết hàm tính tổng các phần tử trong list",
+    "Viết hàm chia hai số a và b",
+    "Viết hàm tìm ước chung lớn nhất của hai số",
+    "Viết hàm kiểm tra số chẵn hay lẻ",
+    "Viết hàm đảo ngược chuỗi",
+    "Viết hàm tìm tổng chữ số n"
+]
 
 def run_agent(requirement: str):
     print("="*60)
@@ -62,7 +77,8 @@ def run_agent(requirement: str):
     print("\n[INFO] Đã xuất toàn bộ chi tiết state vào file 'debug_last_run.json'.")
 
 if __name__ == "__main__":
-    run_agent("Viết hàm tìm số nguyên tố từ 1 đến n")
+    requirement = " ".join(sys.argv[1:]).strip() if len(sys.argv) > 1 else random.choice(DEMO_REQUIREMENTS)
+    run_agent(requirement)
     
     # Bạn có thể thử thêm các test case khó hơn, ví dụ: 
     # run_agent("Viết hàm chia hai số a và b")
