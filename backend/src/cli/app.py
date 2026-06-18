@@ -99,7 +99,11 @@ OutputOpt = typer.Option(
     help="Save final code to this file (e.g. result.py).",
 )
 
-
+DeliverOpt = typer.Option(
+      False,
+      "--deliver",
+      help="After a successful run, review + approve + open a PR via GitHub MCP.",
+  )
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
@@ -111,13 +115,14 @@ def _save_code_to_file(code: str, path: str) -> None:
     except Exception as e:
         print_error(f"Không thể lưu file: {e}")
 
-
+ # add 1 more param deliver
 def _execute(
     requirement: str,
     model: str,
     max_retries: int,
     save_json: bool,
     output_file: Optional[str],
+    deliver: bool = False,
 ) -> None:
     """Thực thi agent và xử lý output file nếu cần."""
     result = run_agent(
@@ -134,7 +139,18 @@ def _execute(
             _save_code_to_file(code, output_file)
         else:
             print_warning("Không có code để lưu.")
-
+        # ── delivery stage ──
+    if deliver:
+          inner = result.get("state", {})
+          if not inner.get("is_success"):
+              print_warning("Run khong thanh cong — bo qua delivery.")
+              return
+          code = inner.get("code", "")
+          if not code:
+              print_warning("Khong co code de deliver.")
+              return
+          from src.delivery.orchestrator import deliver as run_delivery
+          run_delivery(code=code, requirement=requirement)   
 
 # ──────────────────────────────────────────────────────────────────────────────
 # `run` command — run với requirement cụ thể
@@ -147,6 +163,8 @@ def cmd_run(
     max_retries: int  = MaxRetriesOpt,
     no_save:     bool = NoSaveOpt,
     output:      Optional[str] = OutputOpt,
+    #declare param
+    deliver:     bool = DeliverOpt,      
 ) -> None:
     show_banner(__version__)
     _execute(
@@ -155,6 +173,8 @@ def cmd_run(
         max_retries=max_retries,
         save_json=not no_save,
         output_file=output,
+        # pass
+        deliver=deliver,        
     )
 
 
@@ -254,6 +274,8 @@ def main_callback(
     max_retries: int = MaxRetriesOpt,
     no_save: bool = NoSaveOpt,
     output: Optional[str] = OutputOpt,
+    #add 1 more param
+    deliver:     bool = DeliverOpt, 
 ) -> None:
     """
     OpenCode Agent -- AI-powered code generation & testing.
@@ -272,8 +294,8 @@ def main_callback(
     show_banner(__version__)
 
     console.print(
-        f"  [dim {Colors.TEXT_DIM}]Chào mừng bạn đến với OpenCode Agent! "
-        f"Nhập [/dim][bold {Colors.PRIMARY}]Ctrl+C[/] [dim {Colors.TEXT_DIM}]để thoát.[/dim]\n"
+        f"  [dim {Colors.TEXT_DIM}]Chào mừng bạn đến với OpenCode Agent! [/]"
+        f"Nhập [bold {Colors.PRIMARY}]Ctrl+C[/] [dim {Colors.TEXT_DIM}]để thoát.[/]\n"
     )
 
     while True:
@@ -311,6 +333,8 @@ def main_callback(
                 max_retries=max_retries,
                 save_json=not no_save,
                 output_file=output,
+                #add 1 more param
+                deliver=deliver,
             )
 
             print_rule()

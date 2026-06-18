@@ -24,6 +24,11 @@ class Settings:
     def __init__(self) -> None:
         _load_dotenv()
         self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+        # add github token to settings
+        self.GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+        self.GITHUB_OWNER = os.getenv("GITHUB_OWNER", "")
+        self.GITHUB_REPO = os.getenv("GITHUB_REPO", "")
+        
 
 
 settings = Settings()
