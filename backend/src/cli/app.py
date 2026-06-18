@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 import typer
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 from rich.text import Text
 
 from . import __version__
@@ -139,18 +139,32 @@ def _execute(
             _save_code_to_file(code, output_file)
         else:
             print_warning("Không có code để lưu.")
-        # ── delivery stage ──
-    if deliver:
-          inner = result.get("state", {})
-          if not inner.get("is_success"):
-              print_warning("Run khong thanh cong — bo qua delivery.")
-              return
-          code = inner.get("code", "")
-          if not code:
-              print_warning("Khong co code de deliver.")
-              return
-          from src.delivery.orchestrator import deliver as run_delivery
-          run_delivery(code=code, requirement=requirement)   
+
+    # ── delivery stage ──────────────────────────────────────────────────────
+    inner = result.get("state", {})
+    code = inner.get("code", "")
+
+    # Chỉ cân nhắc delivery khi run thành công và có code
+    if inner.get("is_success") and code:
+        # --deliver = tự động đồng ý; nếu không có flag thì hỏi sau khi chạy xong
+        should_deliver = deliver or Confirm.ask(
+            "  Deliver this to GitHub as a PR?", default=False
+        )
+        if should_deliver:
+            # Cho người dùng chọn branch + tên file (Enter để dùng mặc định)
+            branch = Prompt.ask("  Branch name (blank = auto)", default="").strip() or None
+            filename = Prompt.ask("  File name", default="solution.py").strip() or "solution.py"
+
+            from src.delivery.orchestrator import deliver as run_delivery
+            run_delivery(
+                code=code,
+                requirement=requirement,
+                target_branch=branch,
+                filename=filename,
+            )
+    elif deliver:
+        # User chủ động yêu cầu --deliver nhưng run không có gì để giao
+        print_warning("Run không thành công hoặc không có code — bỏ qua delivery.")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # `run` command — run với requirement cụ thể
