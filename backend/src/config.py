@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _load_dotenv(path: str = ".env") -> None:
@@ -20,10 +22,12 @@ def _load_dotenv(path: str = ".env") -> None:
             os.environ[key] = value
 
 
-class Settings:
-    def __init__(self) -> None:
-        _load_dotenv()
-        self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+class Settings(BaseSettings):
+    # Đổi tên biến và cho phép đọc chuỗi dài
+    GOOGLE_API_KEYS: str = Field(default=...)
+
+    # extra="ignore" giúp tránh lỗi nếu trong file .env bạn còn giữ các biến cũ khác
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()

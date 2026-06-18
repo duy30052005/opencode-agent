@@ -78,7 +78,7 @@ def run_agent(requirement: str):
 
 if __name__ == "__main__":
     requirement = " ".join(sys.argv[1:]).strip() if len(sys.argv) > 1 else random.choice(DEMO_REQUIREMENTS)
-    run_agent(requirement)
+    # run_agent(requirement)
     
     # Bạn có thể thử thêm các test case khó hơn, ví dụ: 
-    # run_agent("Viết hàm chia hai số a và b")
+    run_agent("viết chương trình tìm tất cả các chuỗi con palindrome dài nhất trong một chuỗi cho trước")
