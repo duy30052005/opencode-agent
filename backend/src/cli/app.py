@@ -272,8 +272,8 @@ def main_callback(
     show_banner(__version__)
 
     console.print(
-        f"  [dim {Colors.TEXT_DIM}]Chào mừng bạn đến với OpenCode Agent! "
-        f"Nhập [/dim][bold {Colors.PRIMARY}]Ctrl+C[/] [dim {Colors.TEXT_DIM}]để thoát.[/dim]\n"
+        f"  [dim {Colors.TEXT_DIM}]Chào mừng bạn đến với OpenCode Agent! [/]"
+        f"Nhập [bold {Colors.PRIMARY}]Ctrl+C[/] [dim {Colors.TEXT_DIM}]để thoát.[/]\n"
     )
 
     while True:
