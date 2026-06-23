@@ -1,84 +1,35 @@
-import uuid
-import json
-import random
+"""
+run_demo.py — Entry point don gian de chay OpenCode Agent.
+
+Su dung:
+    python run_demo.py                          # Interactive mode
+    python run_demo.py "Viet ham tinh giai thua"  # Chay truc tiep
+    python run_demo.py --help                   # Xem tat ca options
+
+Hoac qua module:
+    python -m src.cli                           # Interactive
+    python -m src.cli run "requirement"         # Run command
+    python -m src.cli demo                      # Random demo
+    python -m src.cli --help                    # Help
+"""
+
+import os
 import sys
-from datetime import datetime, timezone
 
-# Import đồ thị từ phần thư mục src
-from src.core.workflow import app
+# Force UTF-8 output on Windows to support unicode characters
+if sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+    except Exception:
+        pass
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
-
-DEMO_REQUIREMENTS = [
-    "Viết hàm tìm số nguyên tố từ 1 đến n",
-    "Viết hàm tính giai thừa của n",
-    "Viết hàm kiểm tra chuỗi palindrome",
-    "Viết hàm tính tổng các phần tử trong list",
-    "Viết hàm chia hai số a và b",
-    "Viết hàm tìm ước chung lớn nhất của hai số",
-    "Viết hàm kiểm tra số chẵn hay lẻ",
-    "Viết hàm đảo ngược chuỗi",
-    "Viết hàm tìm tổng chữ số n"
-]
-
-def run_agent(requirement: str):
-    print("="*60)
-    print(f"🚀 BẮT ĐẦU TASK: {requirement}")
-    print("="*60)
-    
-    # 1. Khởi tạo Input State tuân thủ ĐÚNG định dạng AgentState
-    initial_state = {
-        "metadata": {
-            "task_id": str(uuid.uuid4()),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "version": "1.0",
-            "llm_model": "gemini-2.5-flash"
-        },
-        "state": {
-            "requirement": requirement,
-            "code": None,
-            "execution_result": {
-                "status": "pending",
-                "stdout": "",
-                "stderr": "",
-                "exit_code": -1,
-                "execution_time_ms": 0,
-                "test_cases": []
-            },
-            "is_success": False,
-            "retry_count": 0,
-            "max_retries": 3,
-            "history": []
-        },
-        "action": None
-    }
-
-    # 2. Gọi LangGraph thực thi
-    final_state = app.invoke(initial_state)
-
-    # 3. In kết quả cuối cùng
-    print("\n" + "="*60)
-    print("🎉 KẾT QUẢ CUỐI CÙNG TỪ HỆ THỐNG")
-    print("="*60)
-    
-    state_data = final_state["state"]
-    action_data = final_state.get("action", {})
-    
-    print(f"✅ Trạng thái tổng: {'THÀNH CÔNG' if state_data['is_success'] else 'THẤT BẠI'}")
-    print(f"🔄 Số lần đã thử: {state_data['retry_count']}")
-    print(f"💬 Thông báo từ Node 3: {action_data.get('message', 'Không có thông báo')}")
-    print(f"🔍 Lý do: {action_data.get('reasoning', 'Không có')}")
-    
-    print("\n📝 CODE FINAL:\n")
-    print(state_data.get("code", "Không có code được sinh ra"))
-    
-    # 4. Xuất log ra file JSON để debug chi tiết các trường History
-    with open("debug_last_run.json", "w", encoding="utf-8") as f:
-        json.dump(final_state, f, ensure_ascii=False, indent=2)
-    print("\n[INFO] Đã xuất toàn bộ chi tiết state vào file 'debug_last_run.json'.")
+from src.cli.app import main
 
 if __name__ == "__main__":
     requirement = " ".join(sys.argv[1:]).strip() if len(sys.argv) > 1 else random.choice(DEMO_REQUIREMENTS)
-    # run_agent(requirement)
+    run_agent(requirement)
     
     # Bạn có thể thử thêm các test case khó hơn, ví dụ: 
-    run_agent("viết chương trình tìm tất cả các chuỗi con palindrome dài nhất trong một chuỗi cho trước")
+    # run_agent("Viết hàm chia hai số a và b")
