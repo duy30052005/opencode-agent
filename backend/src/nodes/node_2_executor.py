@@ -284,6 +284,13 @@ Rules:
 - Prefer boundary, normal, and edge cases.
 - Use the previous execution result to avoid repeating obviously weak cases when retry_count > 0.
 - Do not include markdown fences, code, or explanations.
+CRITICAL RULES FOR TEST GENERATION:
+
+-NEVER EXPECT EXCEPTIONS FOR VALID INPUTS: Absolutely DO NOT use "EXCEPTION" or expect an error (like TypeError, NameError) as the expected output unless the requirement explicitly asks to test for error handling.
+
+-IGNORE BROKEN CODE: When writing test cases, base your "Expected Output" STRICTLY on the original Requirement. Do not adapt your expected output to match the bugs, syntax errors, or missing functions in the provided code.
+
+-FORCE FAILURE ON BUGS: If the provided code is missing a method (e.g., due to an indentation error), your test case must still call that method and expect a valid valid return value. This ensures the broken code will FAIL the test.
 """
 
     try:

@@ -1,22 +1,14 @@
 """
-run_demo.py — Entry point don gian de chay OpenCode Agent.
+run_demo.py — Entry point đơn giản để test trực tiếp luồng OpenCode Agent.
 
-Su dung:
-    python run_demo.py                          # Interactive mode
-    python run_demo.py "Viet ham tinh giai thua"  # Chay truc tiep
-    python run_demo.py --help                   # Xem tat ca options
-
-Hoac qua module:
-    python -m src.cli                           # Interactive
-    python -m src.cli run "requirement"         # Run command
-    python -m src.cli demo                      # Random demo
-    python -m src.cli --help                    # Help
+Cách chạy:
+    python run_demo.py
 """
 
 import os
 import sys
 
-# Force UTF-8 output on Windows to support unicode characters
+# Ép hệ thống dùng chuẩn UTF-8 trên Windows để tránh lỗi Unicode (chữ Đ, á, ớ...)
 if sys.platform == "win32":
     try:
         import ctypes
@@ -25,11 +17,27 @@ if sys.platform == "win32":
         pass
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
-from src.cli.app import main
+# Import thẳng hàm run_agent từ engine thay vì đi đường vòng qua Typer app
+from src.cli.runner import run_agent
+
+def main():
+    # Test case "tử huyệt" để ép LLM phải gọi Tool quét AST
+    requirement = (
+        "Viết một class `BankSystem` chứa 2 class con, bên trong có các hàm giao dịch, "
+        "nhưng tao muốn mày cố tình viết code bị sai thụt lề (indentation error) "
+        "hoặc gọi sai tên hàm nội bộ để test công cụ sửa lỗi."
+
+    print("-" * 60)
+    print(f"🚀 BẮT ĐẦU CHẠY TEST ĐỘC LẬP\n📝 Yêu cầu: {requirement}")
+    print("-" * 60)
+    
+    # Kích hoạt Agent (Tối đa 3 lần thử)
+    try:
+        run_agent(requirement=requirement, max_retries=3)
+    except KeyboardInterrupt:
+        print("\n[!] Đã ép dừng hệ thống bằng Ctrl+C.")
+    except Exception as e:
+        print(f"\n[!] Lỗi Crash Hệ Thống: {e}")
 
 if __name__ == "__main__":
-    requirement = " ".join(sys.argv[1:]).strip() if len(sys.argv) > 1 else random.choice(DEMO_REQUIREMENTS)
-    run_agent(requirement)
-    
-    # Bạn có thể thử thêm các test case khó hơn, ví dụ: 
-    # run_agent("Viết hàm chia hai số a và b")
+    main()

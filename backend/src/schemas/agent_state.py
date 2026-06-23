@@ -1,5 +1,8 @@
-from typing import TypedDict
+from typing import TypedDict, Annotated
 from enum import Enum
+
+from langgraph.graph.message import add_messages
+from langchain_core.messages import AnyMessage
 
 class Status(str, Enum):
     ERROR = "error"
@@ -55,6 +58,16 @@ class Action(TypedDict):
     reasoning: str
 
 class AgentState(TypedDict):
+    metadata: Metadata
+    state: State
+    action: Action | None
+
+class AgentState(TypedDict):
+    # [THÊM MỚI] Trường bắt buộc của LangGraph để lưu lịch sử gọi Tool
+    # Reducer `add_messages` sẽ giúp mảng này tự động cộng dồn thay vì bị ghi đè
+    messages: Annotated[list[AnyMessage], add_messages]
+    
+    # [GIỮ NGUYÊN CỦA TEAM]
     metadata: Metadata
     state: State
     action: Action | None

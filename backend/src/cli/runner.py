@@ -13,7 +13,8 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-
+import json
+from langchain_core.messages import BaseMessage
 from rich.live import Live
 from rich.markup import escape as rich_escape
 from rich.progress import Progress, TaskID
@@ -144,7 +145,7 @@ def run_agent(
             # Suppress noisy prints from workflow nodes (redirect to devnull)
             # Rich Progress writes to its own console file handle, NOT sys.stdout,
             # so redirecting sys.stdout here is safe.
-            with open(os.devnull, "w") as devnull:
+            with open(os.devnull, "w", encoding="utf-8") as devnull:
                 with contextlib.redirect_stdout(devnull):
                     final_state = _run_with_live_updates(
                         workflow_app, initial_state, progress, tid1
@@ -160,13 +161,47 @@ def run_agent(
 
     # ── Save JSON ─────────────────────────────────────────────────────────────
     if save_json and final_state:
-        import json
+        def sanitize_for_json(obj: Any) -> Any:
+            """Đệ quy làm sạch toàn bộ object trước khi đưa cho json.dump"""
+            if isinstance(obj, (str, int, float, bool, type(None))):
+                return obj
+            if isinstance(obj, dict):
+                return {str(k): sanitize_for_json(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple, set)):
+                return [sanitize_for_json(v) for v in obj]
+            
+            # Xử lý các Object đặc biệt của LangChain / Pydantic
+            if hasattr(obj, "to_json"):
+                try:
+                    return obj.to_json()
+                except Exception:
+                    pass
+            if hasattr(obj, "model_dump"): # Pydantic V2 / Langchain BaseMessage
+                try:
+                    return sanitize_for_json(obj.model_dump())
+                except Exception:
+                    pass
+            if hasattr(obj, "dict"): # Pydantic V1
+                try:
+                    return sanitize_for_json(obj.dict())
+                except Exception:
+                    pass
+            
+            # Bước đường cùng: Biến nó thành chuỗi Text
+            return str(obj)
+
         try:
+            # Bước 1: Tẩy rửa dữ liệu an toàn trên RAM
+            safe_state = sanitize_for_json(final_state)
+            
+            # Bước 2: Ghi xuống đĩa (Lúc này json.dump chắc chắn không bao giờ crash)
             with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(final_state, f, ensure_ascii=False, indent=2)
-            print_info(f"State đã lưu → [dim]{json_path}[/dim]")
+                json.dump(safe_state, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            print_info(f"State đã lưu an toàn tuyệt đối → [dim]{json_path}[/dim]")
         except Exception as e:
-            pass  # không critical
+            print_node_error(f"Lỗi ghi file debug: {e}")
 
     return final_state or {}
 
