@@ -19,6 +19,8 @@ from typing import Optional
 import typer
 from rich.prompt import Prompt
 from rich.text import Text
+from src.cli.patch_viewer import view_latest_patch
+from src.cli.flow_viewer import view_execution_flow
 
 from . import __version__
 from .display import (
@@ -278,53 +280,65 @@ def main_callback(
     )
 
     while True:
-        try:
-            # Interactive prompt
-            requirement = Prompt.ask(
-                Text.from_markup(f"  [bold {Colors.PRIMARY}]❯[/] [bold]Nhập yêu cầu"),
-                console=console,
-                default="",
-            ).strip()
+            try:
+                # Interactive prompt
+                requirement = Prompt.ask(
+                    Text.from_markup(f"  [bold {Colors.PRIMARY}]❯[/] [bold]Nhập yêu cầu"),
+                    console=console,
+                    default="",
+                ).strip()
 
-            if not requirement:
-                print_warning("Yêu cầu không được để trống. Thử lại hoặc nhấn Ctrl+C để thoát.")
-                continue
+                if not requirement:
+                    print_warning("Yêu cầu không được để trống. Thử lại hoặc nhấn Ctrl+C để thoát.")
+                    continue
 
-            # Special commands in interactive mode
-            if requirement.lower() in ("exit", "quit", "q", "thoat", "thoat"):
-                console.print(f"\n  [dim]Tam biet! Hen gap lai![/dim]\n")
-                break
+                # Special commands in interactive mode
+                if requirement.lower() in ("exit", "quit", "q", "thoat", "thoát"):
+                    console.print(f"\n  [dim]Tam biet! Hen gap lai![/dim]\n")
+                    break
 
-            if requirement.lower() in ("demo", "random"):
-                requirement = random.choice(DEMO_REQUIREMENTS)
-                console.print(
-                    f"\n  [dim]Task ngau nhien:[/]  [bold {Colors.PRIMARY}]{requirement}[/]\n"
+                if requirement.lower() in ("demo", "random"):
+                    requirement = random.choice(DEMO_REQUIREMENTS)
+                    console.print(
+                        f"\n  [dim]Task ngau nhien:[/]  [bold {Colors.PRIMARY}]{requirement}[/]\n"
+                    )
+
+                if requirement.lower() in ("help", "?"):
+                    _show_interactive_help()
+                    continue
+
+                # ==========================================
+                # TÍCH HỢP SLASH COMMANDS CHO UI BÁO CÁO
+                # ==========================================
+                if requirement.lower() in ("/flow", "flow"):
+                    view_execution_flow("debug_last_run.json")
+                    continue
+
+                if requirement.lower() in ("/patch", "patch"):
+                    view_latest_patch("debug_last_run.json")
+                    continue
+                # ==========================================
+
+                console.print()
+                _execute(
+                    requirement=requirement,
+                    model=model,
+                    max_retries=max_retries,
+                    save_json=not no_save,
+                    output_file=output,
                 )
 
-            if requirement.lower() in ("help", "?"):
-                _show_interactive_help()
-                continue
+                print_rule()
+                console.print()
 
-            console.print()
-            _execute(
-                requirement=requirement,
-                model=model,
-                max_retries=max_retries,
-                save_json=not no_save,
-                output_file=output,
-            )
-
-            print_rule()
-            console.print()
-
-        except KeyboardInterrupt:
-            console.print(f"\n\n  [dim]Tam biet! Hen gap lai![/dim]\n")
-            break
-        except typer.Exit:
-            break
-        except Exception as e:
-            print_error(f"Lỗi không mong muốn: {e}")
-            console.print_exception(show_locals=False)
+            except KeyboardInterrupt:
+                console.print(f"\n\n  [dim]Tam biet! Hen gap lai![/dim]\n")
+                break
+            except typer.Exit:
+                break
+            except Exception as e:
+                print_error(f"Lỗi không mong muốn: {e}")
+                console.print_exception(show_locals=False)
 
 
 def _show_interactive_help() -> None:
