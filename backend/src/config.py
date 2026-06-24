@@ -28,6 +28,15 @@ class Settings(BaseSettings):
 
     # extra="ignore" giúp tránh lỗi nếu trong file .env bạn còn giữ các biến cũ khác
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+class Settings:
+    def __init__(self) -> None:
+        _load_dotenv()
+        self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+        # add github token to settings
+        self.GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+        self.GITHUB_OWNER = os.getenv("GITHUB_OWNER", "")
+        self.GITHUB_REPO = os.getenv("GITHUB_REPO", "")
+        
 
 
 settings = Settings()

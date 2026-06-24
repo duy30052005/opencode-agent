@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 import typer
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 from rich.text import Text
 from src.cli.patch_viewer import view_latest_patch
 from src.cli.flow_viewer import view_execution_flow
@@ -101,7 +101,11 @@ OutputOpt = typer.Option(
     help="Save final code to this file (e.g. result.py).",
 )
 
-
+DeliverOpt = typer.Option(
+      False,
+      "--deliver",
+      help="After a successful run, review + approve + open a PR via GitHub MCP.",
+  )
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
@@ -113,13 +117,14 @@ def _save_code_to_file(code: str, path: str) -> None:
     except Exception as e:
         print_error(f"Không thể lưu file: {e}")
 
-
+ # add 1 more param deliver
 def _execute(
     requirement: str,
     model: str,
     max_retries: int,
     save_json: bool,
     output_file: Optional[str],
+    deliver: bool = False,
 ) -> None:
     """Thực thi agent và xử lý output file nếu cần."""
     result = run_agent(
@@ -137,6 +142,31 @@ def _execute(
         else:
             print_warning("Không có code để lưu.")
 
+    # ── delivery stage ──────────────────────────────────────────────────────
+    inner = result.get("state", {})
+    code = inner.get("code", "")
+
+    # Chỉ cân nhắc delivery khi run thành công và có code
+    if inner.get("is_success") and code:
+        # --deliver = tự động đồng ý; nếu không có flag thì hỏi sau khi chạy xong
+        should_deliver = deliver or Confirm.ask(
+            "  Deliver this to GitHub as a PR?", default=False
+        )
+        if should_deliver:
+            # Cho người dùng chọn branch + tên file (Enter để dùng mặc định)
+            branch = Prompt.ask("  Branch name (blank = auto)", default="").strip() or None
+            filename = Prompt.ask("  File name", default="solution.py").strip() or "solution.py"
+
+            from src.delivery.orchestrator import deliver as run_delivery
+            run_delivery(
+                code=code,
+                requirement=requirement,
+                target_branch=branch,
+                filename=filename,
+            )
+    elif deliver:
+        # User chủ động yêu cầu --deliver nhưng run không có gì để giao
+        print_warning("Run không thành công hoặc không có code — bỏ qua delivery.")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # `run` command — run với requirement cụ thể
@@ -149,6 +179,8 @@ def cmd_run(
     max_retries: int  = MaxRetriesOpt,
     no_save:     bool = NoSaveOpt,
     output:      Optional[str] = OutputOpt,
+    #declare param
+    deliver:     bool = DeliverOpt,      
 ) -> None:
     show_banner(__version__)
     _execute(
@@ -157,6 +189,8 @@ def cmd_run(
         max_retries=max_retries,
         save_json=not no_save,
         output_file=output,
+        # pass
+        deliver=deliver,        
     )
 
 
@@ -256,6 +290,8 @@ def main_callback(
     max_retries: int = MaxRetriesOpt,
     no_save: bool = NoSaveOpt,
     output: Optional[str] = OutputOpt,
+    #add 1 more param
+    deliver:     bool = DeliverOpt, 
 ) -> None:
     """
     OpenCode Agent -- AI-powered code generation & testing.
