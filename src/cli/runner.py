@@ -151,6 +151,7 @@ def run_agent(
 
     # ─ Run with progress spinner ──────────────────────────────────────────────
     timer1 = _NodeTimer()
+    all_retry_results: list = []  # collect (attempt, test_cases) per retry
     with make_node_progress() as progress:
         tid1 = progress.add_task(
             description=f"  [{Colors.NODE_1}]>>  Node 1 - Generator[/]  [dim]Starting...[/dim]",
@@ -164,17 +165,17 @@ def run_agent(
             # so redirecting sys.stdout here is safe.
             with open(os.devnull, "w", encoding="utf-8") as devnull:
                 with contextlib.redirect_stdout(devnull):
-                    final_state = _run_with_live_updates(
+                    final_state, all_retry_results = _run_with_live_updates(
                         workflow_app, initial_state, progress, tid1
                     )
         except Exception as e:
             # If devnull redirect fails, run without redirection
-            final_state = _run_with_live_updates(
+            final_state, all_retry_results = _run_with_live_updates(
                 workflow_app, initial_state, progress, tid1
             )
 
     # ── Post-run display ──────────────────────────────────────────────────────
-    _render_results(final_state, run_start)
+    _render_results(final_state, run_start, all_retry_results)
 
     # ── Save JSON ─────────────────────────────────────────────────────────────
     if save_json and final_state:
@@ -244,10 +245,11 @@ def _run_with_live_updates(
     initial_state: Dict[str, Any],
     progress: Progress,
     spinner_task: TaskID,
-) -> Dict[str, Any]:
+) -> tuple:
     """
     Chạy LangGraph workflow và cập nhật spinner theo từng node.
-    Dùng stream() nếu available, fallback về invoke().
+    Returns (final_output, all_retry_results) where all_retry_results is a
+    list of {attempt, test_cases, code, is_success} per executor run.
     """
 
     import sys
@@ -260,6 +262,8 @@ def _run_with_live_updates(
 
     node_timers: Dict[str, float] = {}
     node_done_order: list = []
+    all_retry_results: list = []   # NEW: collect per-attempt results
+    current_attempt: int = 1
 
     try:
         # LangGraph stream() yields (node_name, output) tuples
@@ -283,6 +287,7 @@ def _run_with_live_updates(
                 retry_count = inner.get("retry_count", 0)
                 if retry_count > last_retry and node_name == "node_1_generator":
                     last_retry = retry_count
+                    current_attempt = retry_count + 1
                     # Stop current spinner, print retry banner, restart
                     progress.stop_task(spinner_task)
                     console.print()
@@ -293,6 +298,18 @@ def _run_with_live_updates(
                     )
                     # Re-add spinner task
                     progress.reset(spinner_task)
+
+                # ── Capture executor results per attempt ──
+                if node_name == "node_2_executor":
+                    exec_res = inner.get("execution_result", {})
+                    tc = exec_res.get("test_cases", [])
+                    if tc:
+                        all_retry_results.append({
+                            "attempt": current_attempt,
+                            "test_cases": tc,
+                            "code": inner.get("code", ""),
+                            "is_success": inner.get("is_success", False),
+                        })
 
                 # ── Update spinner description ──
                 is_success = inner.get("is_success", False)
@@ -320,20 +337,25 @@ def _run_with_live_updates(
 
                 final_output = node_output
 
-        return final_output or {}
+        return final_output or {}, all_retry_results
 
     except (NotImplementedError, AttributeError):
         # Fallback: stream() not supported by this workflow version
         console.print(f"  [dim]Running in batch mode...[/]")
-        return workflow_app.invoke(initial_state)
+        result = workflow_app.invoke(initial_state)
+        return result, []
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # _render_results — hiển thị sau khi agent hoàn thành
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _render_results(final_state: Dict[str, Any], run_start: float) -> None:
-    """Render code panel, test results và final summary."""
+def _render_results(
+    final_state: Dict[str, Any],
+    run_start: float,
+    retry_results: list = None,
+) -> None:
+    """Render code panel, test results từng lần thử và final summary."""
     if not final_state:
         return
 
@@ -355,13 +377,38 @@ def _render_results(final_state: Dict[str, Any], run_start: float) -> None:
     print_rule("Output")
     console.print()
 
-    # ── Code panel ──
+    # ── Code panel (final code) ──
     if code:
         show_code_panel(code)
 
-    # ── Test results ──
-    if test_cases:
-        show_test_results(test_cases)
+    # ── Show ALL retry attempts' test results ──
+    if retry_results and len(retry_results) > 1:
+        # Multiple attempts: show each one labeled
+        for attempt_data in retry_results:
+            attempt_num  = attempt_data["attempt"]
+            attempt_tcs  = attempt_data["test_cases"]
+            attempt_ok   = attempt_data["is_success"]
+            is_last      = (attempt_data is retry_results[-1])
+
+            passed = sum(1 for tc in attempt_tcs if tc.get("passed", False))
+            total  = len(attempt_tcs)
+
+            if attempt_ok:
+                label_color = Colors.SUCCESS
+                label_icon  = "✅"
+                label_text  = f"Lần thử {attempt_num}: PASS ({passed}/{total})"
+            else:
+                label_color = Colors.ERROR
+                label_icon  = "❌"
+                label_text  = f"Lần thử {attempt_num}: FAIL ({passed}/{total} passed)"
+
+            console.print(f"  [bold {label_color}]{label_icon}  {label_text}[/]")
+            show_test_results(attempt_tcs)
+            console.print()
+    else:
+        # Single attempt or no retry data
+        if test_cases:
+            show_test_results(test_cases)
 
     # ── Final summary ──
     show_final_result(
@@ -370,4 +417,4 @@ def _render_results(final_state: Dict[str, Any], run_start: float) -> None:
         message=message,
         total_duration=total_elapsed,
         task_id=task_id,
-    )
+    )

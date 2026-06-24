@@ -35,10 +35,25 @@ def _device_login() -> str:
       raise RuntimeError(f"Login failed: {res.get('error')}")
 
 def get_user_token() -> str:
-    """Return a cached token, or run device login and cache it."""
+    """Return token from .env first, then cached token, or run device login."""
+    # Priority 1: GITHUB_TOKEN from .env (fastest, no browser needed)
+    try:
+        from src.config import settings
+        env_token = settings.GITHUB_TOKEN.strip()
+        if env_token:
+            return env_token
+    except Exception:
+        pass
+
+    # Priority 2: cached token from previous device login
     if TOKEN_CACHE.exists():
-        return json.loads(TOKEN_CACHE.read_text())["access_token"]
+        try:
+            return json.loads(TOKEN_CACHE.read_text())["access_token"]
+        except Exception:
+            pass
+
+    # Priority 3: interactive device login
     token = _device_login()
     TOKEN_CACHE.parent.mkdir(parents=True, exist_ok=True)
     TOKEN_CACHE.write_text(json.dumps({"access_token": token}))
-    return token
+    return token

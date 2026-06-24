@@ -47,6 +47,7 @@ class State(TypedDict):
     requirement: str
     code: str | None
     execution_result: ExecutionResult
+    confidence_score: int | None
     is_success: bool
     retry_count: int
     max_retries: int
