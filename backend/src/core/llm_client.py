@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 
 from ..config import settings
@@ -9,14 +9,28 @@ except ModuleNotFoundError:
 	ChatGoogleGenerativeAI = None
 
 
+from dataclasses import dataclass, field
+from typing import List, Any
+from langchain_core.messages import AIMessage
+
 @dataclass
 class _LLMResponse:
-	content: str
-
+    content: str
+    tool_calls: List[Any] = field(default_factory=list)
 
 class _FallbackLLM:
-	def invoke(self, prompt):
-		return _LLMResponse(content=_generate_fallback_content(str(prompt)))
+    def invoke(self, prompt, **kwargs):
+        # Giả lập trả về một AIMessage chuẩn của LangChain
+        content = _generate_fallback_content(str(prompt))
+        return AIMessage(content=content, tool_calls=[])
+        
+    def bind_tools(self, tools, **kwargs):
+        """
+        Giả lập phương thức bind_tools để Node 1 không bị crash.
+        Trong chế độ fallback, chúng ta không thực sự dùng tool, 
+        chỉ trả về chính instance để giữ luồng code.
+        """
+        return self
 
 
 _CODE_TEMPLATES = [

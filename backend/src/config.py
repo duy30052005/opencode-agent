@@ -5,8 +5,8 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 def _load_dotenv(path: str = ".env") -> None:
+    """Hàm tự chế để đọc file .env thủ công (dành cho các hệ điều hành kén dotenv)"""
     env_path = Path(path)
     if not env_path.exists():
         return
@@ -21,22 +21,29 @@ def _load_dotenv(path: str = ".env") -> None:
         if key and key not in os.environ:
             os.environ[key] = value
 
+# Ép hệ thống nạp file .env ngay khi file config này được gọi
+_load_dotenv()
 
 class Settings(BaseSettings):
-    # Đổi tên biến và cho phép đọc chuỗi dài
-    GOOGLE_API_KEYS: str = Field(default=...)
+    """
+    Class cấu hình chung, đã được gộp từ cả nhánh main và nhánh của Duy.
+    Dùng BaseSettings của Pydantic để tự động ánh xạ với file .env
+    """
+    # 1. Cấu hình AI (Hỗ trợ cả 2 tên biến để tránh lỗi tương thích ngược)
+    GOOGLE_API_KEYS: str = Field(default="")
+    GOOGLE_API_KEY: str = Field(default="")
+    
+    # 2. Cấu hình Github (Code của team)
+    GITHUB_TOKEN: str = Field(default="")
+    GITHUB_OWNER: str = Field(default="")
+    GITHUB_REPO: str = Field(default="")
 
-    # extra="ignore" giúp tránh lỗi nếu trong file .env bạn còn giữ các biến cũ khác
+    # extra="ignore" giúp tránh crash nếu file .env có những biến lạ khác
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-class Settings:
-    def __init__(self) -> None:
-        _load_dotenv()
-        self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
-        # add github token to settings
-        self.GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-        self.GITHUB_OWNER = os.getenv("GITHUB_OWNER", "")
-        self.GITHUB_REPO = os.getenv("GITHUB_REPO", "")
-        
 
-
+# Khởi tạo đối tượng settings duy nhất để toàn dự án sử dụng
 settings = Settings()
+
+# Đảm bảo nếu dùng GOOGLE_API_KEY cũ thì GOOGLE_API_KEYS cũng nhận được giá trị
+if not settings.GOOGLE_API_KEYS and settings.GOOGLE_API_KEY:
+    settings.GOOGLE_API_KEYS = settings.GOOGLE_API_KEY
