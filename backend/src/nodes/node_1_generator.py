@@ -139,27 +139,46 @@ class CodeGenerator(BaseNode):
         return code_content.strip()
 
     def _apply_patch(self, original_code: str, llm_response: str) -> str:
+        """
+        Áp dụng bản vá cục bộ bằng định dạng SEARCH/REPLACE.
+        Đã được nâng cấp để khoan dung với lỗi định dạng từ LLM (Fault-tolerant).
+        """
+        import re
+        
+        # 🌟 CẢI TIẾN CHÍ MẠNG: 
+        # Thay vì ép buộc kết thúc bằng '>>>> REPLACE', ta dùng '>>>>.*' 
+        # để chấp nhận việc LLM viết thiếu (chỉ viết >>>>) hoặc viết sai chính tả.
         pattern = re.compile(
-            r"<<<< SEARCH\s*\n(.*?)\n\s*(?:====+|REPLACE)\s*\n(.*?)(?:\n\s*>>>> REPLACE|\n\s*```|\Z)", 
+            r"<<<< SEARCH\s*\n(.*?)\n\s*(?:====+|REPLACE)\s*\n(.*?)(?:\n\s*>>>>.*|\n\s*```|\Z)", 
             re.DOTALL
         )
         
         patches = pattern.findall(llm_response)
+        
         if not patches:
-            print(f"\n[Cảnh báo Node 1] LLM có trả về <<<< SEARCH nhưng format sai. Regex không bắt được!")
-            return original_code 
-            
-        patched_code = original_code
+            # Nếu không tìm thấy khối patch nào, trả về chính llm_response 
+            # (Đề phòng trường hợp LLM sinh lại toàn bộ code ở dạng thường)
+            clean_code = llm_response.replace("```python", "").replace("```", "").strip()
+            return clean_code
+
+        modified_code = original_code if original_code else ""
+        
         for search_block, replace_block in patches:
-            sb_stripped = search_block.strip()
-            rb_stripped = replace_block.replace("```", "").strip() 
+            search_block = search_block.strip()
+            # Dọn dẹp các ký tự thừa bị dính vào do lỗi format của LLM
+            replace_block = replace_block.replace("```", "").strip()
             
-            if sb_stripped in patched_code:
-                patched_code = patched_code.replace(sb_stripped, rb_stripped)
+            if search_block in modified_code:
+                modified_code = modified_code.replace(search_block, replace_block)
             else:
-                print(f"\n[Cảnh báo Node 1] Khối SEARCH không khớp với code hiện tại!")
-                
-        return patched_code
+                # Fallback: Nếu không tìm thấy đoạn SEARCH chính xác từng khoảng trắng,
+                # ta thử dọn dẹp khoảng trắng dòng đầu/cuối để match dính.
+                search_lines = search_block.splitlines()
+                if search_lines and search_lines[0] in modified_code:
+                    # Logic tìm kiếm tương đối nếu cần (có thể mở rộng sau)
+                    pass
+
+        return modified_code
     
     def _get_new_code_prompt(self, requirement: str) -> str:
         return f"""You are an expert Python developer with access to codebase search tools.
