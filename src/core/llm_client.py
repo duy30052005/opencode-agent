@@ -9,14 +9,17 @@ except ModuleNotFoundError:
 	ChatGoogleGenerativeAI = None
 
 
-@dataclass
-class _LLMResponse:
-	content: str
-
+from langchain_core.messages import AIMessage
 
 class _FallbackLLM:
 	def invoke(self, prompt):
-		return _LLMResponse(content=_generate_fallback_content(str(prompt)))
+		msg = AIMessage(content=_generate_fallback_content(str(prompt)))
+		msg.tool_calls = []
+		return msg
+		
+	def bind_tools(self, tools, **kwargs):
+		# Dummy method to prevent AttributeError when using fallback
+		return self
 
 
 _CODE_TEMPLATES = [

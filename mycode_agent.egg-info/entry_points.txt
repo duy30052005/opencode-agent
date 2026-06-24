@@ -1,0 +1,2 @@
+[console_scripts]
+mycode = src.cli.app:main

@@ -1,3 +1,24 @@
+Metadata-Version: 2.4
+Name: mycode-agent
+Version: 1.0.0
+Summary: Lightweight OpenCode Agent — AI-powered code generation & self-correction
+Author-email: OpenCode Team <team@opencode.dev>
+License: MIT
+Keywords: ai,code-generation,langgraph,agent,cli
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: langgraph>=0.2
+Requires-Dist: langchain>=0.3
+Requires-Dist: langchain-google-genai>=2.0
+Requires-Dist: langchain-core>=0.3
+Requires-Dist: typer>=0.12
+Requires-Dist: rich>=13.0
+Requires-Dist: tree-sitter>=0.24
+Requires-Dist: tree-sitter-python>=0.24
+Requires-Dist: mcp>=1.0
+Requires-Dist: pydantic-settings>=2.0
+Requires-Dist: python-dotenv>=1.0
+
 # 🤖 Lightweight OpenCode Agent
 
 **Hệ thống Agent tự viết code → chạy thử → đọc lỗi → sửa code**

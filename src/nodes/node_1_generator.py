@@ -1,9 +1,14 @@
 from .base_node import BaseNode
 from src.schemas.node_1_schema import Node1Input, Node1Output
 from src.core import llm_client
-from src.tools.ast_tools import analyze_code_structure, discover_symbols
+from src.tools.ast_tools import (
+    analyze_code_structure, discover_symbols,
+    find_references, go_to_definition,
+    coding_tools,
+)
 from src.tools.search_tools import grep_search
 from src.tools.predict_tools import predict_function_meaning
+from src.tools.replace_tools import replace_in_file, preview_patch
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 import time
 import re
@@ -53,8 +58,13 @@ class CodeGenerator(BaseNode):
             
             prompt = self._get_fix_code_prompt(requirement, code, stderr, ast_info)
 
-        # 2. TRANG BỊ BỘ 3 TOOL VÀ KHỞI TẠO VÒNG LẶP SUY NGHĨ (AGENTIC LOOP)
-        llm_with_tools = llm_client.llm.bind_tools([grep_search, discover_symbols, predict_function_meaning])
+        # 2. TRANG BỊ BỘ 6 TOOL VÀ KHỚI TẠO VÒNG LẶP SUY NGHĨ (AGENTIC LOOP)
+        all_tools = [
+            grep_search, discover_symbols, find_references,
+            go_to_definition, predict_function_meaning,
+            replace_in_file, preview_patch,
+        ]
+        llm_with_tools = llm_client.llm.bind_tools(all_tools)
         
         messages = [HumanMessage(content=prompt)]
         final_content = ""
@@ -83,8 +93,16 @@ class CodeGenerator(BaseNode):
                         tool_result = grep_search.invoke(tool_args)
                     elif tool_name == "discover_symbols":
                         tool_result = discover_symbols.invoke(tool_args)
+                    elif tool_name == "find_references":
+                        tool_result = find_references.invoke(tool_args)
+                    elif tool_name == "go_to_definition":
+                        tool_result = go_to_definition.invoke(tool_args)
                     elif tool_name == "predict_function_meaning":
                         tool_result = predict_function_meaning.invoke(tool_args)
+                    elif tool_name == "replace_in_file":
+                        tool_result = replace_in_file.invoke(tool_args)
+                    elif tool_name == "preview_patch":
+                        tool_result = preview_patch.invoke(tool_args)
                     else:
                         tool_result = f"Lỗi: Tool '{tool_name}' không tồn tại."
                 except Exception as e:

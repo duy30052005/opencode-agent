@@ -410,11 +410,38 @@ def show_final_result(
         content.append(f"\n  Task ID:      ", style=f"dim {Colors.TEXT_DIM}")
         content.append(task_id[:16] + "...", style=f"{Colors.ACCENT_LIGHT}")
 
+    # AC-03: Thong bao hoc tap than thien khi that bai
+    if not is_success:
+        content.append(f"\n\n  ", style="")
+        content.append(
+            "Agent chua tim ra giai phap toi uu sau nhieu lan thu. "
+            "Day la code hien tai va log loi de ban cung nghien cuu nhe!",
+            style=f"italic {Colors.WARNING}",
+        )
+        content.append(f"\n\n  Goi y cho hoc sinh:", style=f"bold {Colors.INFO}")
+        content.append(
+            f"\n    - Xem code trong panel phia tren"
+            f"\n    - Xem log loi trong bang Test Results"
+            f"\n    - Go /flow  de xem lich su tung retry"
+            f"\n    - Go /patch de xem chi tiet thay doi cuoi",
+            style=f"dim {Colors.TEXT}",
+        )
+
+    # AC-02: Thong bao tu sua thanh cong
+    if is_success and retry_count > 0:
+        content.append(f"\n\n  Agent da tu sua ", style=f"bold {Colors.SUCCESS}")
+        content.append(f"{retry_count} lan", style=f"bold {Colors.WARNING}")
+        content.append(f" de dat duoc ket qua dung!", style=f"bold {Colors.SUCCESS}")
+        content.append(
+            f"\n     Go /flow de xem lich su debug chi tiet.",
+            style=f"dim {Colors.TEXT_DIM}",
+        )
+
     console.print()
     console.print(
         Panel(
             content,
-            title=f"[bold {color}]◆ Kết Quả[/]",
+            title=f"[bold {color}]Ket Qua[/]",
             border_style=color,
             box=box.DOUBLE_EDGE,
             padding=(0, 1),

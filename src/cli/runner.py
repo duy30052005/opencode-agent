@@ -93,6 +93,23 @@ def run_agent(
     task_id   = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
 
+    # ── FR-04.3: Workspace Awareness ──────────────────────────────────────────────
+    try:
+        from .workspace import detect_workspace, format_workspace_summary
+        from rich.panel import Panel as RichPanel
+        from rich import box as rbox
+        ws = detect_workspace()
+        ws_summary = format_workspace_summary(ws)
+        console.print(RichPanel(
+            ws_summary,
+            title=f"[bold {Colors.TEXT_DIM}]💻  Workspace Context (FR-04.3)[/]",
+            border_style=Colors.TEXT_DIM,
+            box=rbox.SIMPLE,
+            padding=(0, 2),
+        ))
+    except Exception:
+        pass  # Workspace detection không ảnh hưởng luồng chính
+
     # ── Show task panel ───────────────────────────────────────────────────────
     show_task_panel(requirement, task_id=task_id, model=model)
 
@@ -202,6 +219,18 @@ def run_agent(
             print_info(f"State đã lưu an toàn tuyệt đối → [dim]{json_path}[/dim]")
         except Exception as e:
             print_node_error(f"Lỗi ghi file debug: {e}")
+
+    # ── AC-02: Tự động hiển thị lịch sử sửa lỗi nếu có retry ────────────────────────
+    if final_state and save_json:
+        retry_count = final_state.get("state", {}).get("retry_count", 0)
+        if retry_count > 0:
+            try:
+                from .flow_viewer import view_execution_flow
+                console.print()
+                print_rule("Lịch Sử Sửa Lỗi (AC-02)")
+                view_execution_flow(json_path)
+            except Exception:
+                pass
 
     return final_state or {}
 

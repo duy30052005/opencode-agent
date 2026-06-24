@@ -1,4 +1,7 @@
+import ast
 import os
+import re
+from typing import List, Dict, Any
 from langchain_core.tools import tool
 import tree_sitter_python as tspython
 from tree_sitter import Language, Parser
@@ -6,6 +9,8 @@ from tree_sitter import Language, Parser
 # Khởi tạo Parser tĩnh (Cực nhẹ, không tốn RAM, Error-tolerant)
 PY_LANGUAGE = Language(tspython.language())
 parser = Parser(PY_LANGUAGE)
+
+_IGNORE_DIRS = {'.git', '__pycache__', 'node_modules', 'venv', '.venv', 'env', 'dist', 'build'}
 
 # ---------------------------------------------------------
 # HÀM 1: PHÂN TÍCH CODE TRONG BỘ NHỚ (In-memory)
@@ -96,5 +101,131 @@ def discover_symbols(file_path: str) -> str:
         
     except Exception as e:
         return f"Lỗi đọc file: {str(e)}"
+
+
+# ---------------------------------------------------------
+# HÀM 3: FIND REFERENCES (FR-05.2 — LSP Simulation)
+# ---------------------------------------------------------
+@tool
+def find_references(symbol_name: str, directory: str = ".") -> str:
+    """
+    FR-05.2 LSP Simulation — Find References.
+    Tìm tất cả các vị trí trong workspace mà một hàm/biến/class được SỬ DỤNG
+    (không phải nơi định nghĩa). Rất hữu ích để hiểu impact khi refactor.
+
+    Args:
+        symbol_name: Tên hàm, class hoặc biến cần tìm reference.
+        directory:   Thư mục gốc để tìm kiếm (mặc định là thư mục hiện tại).
+    """
+    results: List[str] = []
+
+    for root, dirs, files in os.walk(directory):
+        dirs[:] = [d for d in dirs if d not in _IGNORE_DIRS and not d.startswith('.')]
+        for fname in files:
+            if not fname.endswith('.py'):
+                continue
+            fpath = os.path.join(root, fname)
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    source = f.read()
+                tree = ast.parse(source)
+            except Exception:
+                continue
+
+            lines = source.splitlines()
+            for node in ast.walk(tree):
+                # Bắt các lần gọi hàm: symbol_name(...)
+                if isinstance(node, ast.Call):
+                    func = node.func
+                    name = None
+                    if isinstance(func, ast.Name):
+                        name = func.id
+                    elif isinstance(func, ast.Attribute):
+                        name = func.attr
+                    if name == symbol_name:
+                        ln = node.lineno
+                        snippet = lines[ln - 1].strip() if ln <= len(lines) else ''
+                        results.append(f"{fpath}:{ln}  →  {snippet}")
+                # Bắt các lần dùng biến/class: Name(id=symbol_name)
+                elif isinstance(node, ast.Name) and node.id == symbol_name:
+                    # Bỏ qua các nơi ĐỊNH NGHĨA (FunctionDef, ClassDef, arg)
+                    ln = node.lineno
+                    snippet = lines[ln - 1].strip() if ln <= len(lines) else ''
+                    ref_str = f"{fpath}:{ln}  →  {snippet}"
+                    if ref_str not in results:
+                        results.append(ref_str)
+
+    if not results:
+        return f"Không tìm thấy reference nào đến '{symbol_name}' trong '{directory}'."
+    if len(results) > 50:
+        return f"Tìm thấy >{len(results)} kết quả. 50 đầu tiên:\n" + "\n".join(results[:50])
+    return f"=== REFERENCES của [{symbol_name}] ({len(results)} kết quả) ===\n" + "\n".join(results)
+
+
+# ---------------------------------------------------------
+# HÀM 4: GO TO DEFINITION (FR-05.2 — LSP Simulation)
+# ---------------------------------------------------------
+@tool
+def go_to_definition(symbol_name: str, directory: str = ".") -> str:
+    """
+    FR-05.2 LSP Simulation — Go To Definition.
+    Tìm chính xác nơi một hàm (def) hoặc class (class) được ĐỊNH NGHĨA trong workspace.
+    Trả về đường dẫn file + số dòng + signature đầy đủ.
+
+    Args:
+        symbol_name: Tên hàm hoặc class cần tìm định nghĩa.
+        directory:   Thư mục gốc để tìm kiếm (mặc định là thư mục hiện tại).
+    """
+    results: List[str] = []
+
+    for root, dirs, files in os.walk(directory):
+        dirs[:] = [d for d in dirs if d not in _IGNORE_DIRS and not d.startswith('.')]
+        for fname in files:
+            if not fname.endswith('.py'):
+                continue
+            fpath = os.path.join(root, fname)
+            try:
+                with open(fpath, 'r', encoding='utf-8') as f:
+                    source = f.read()
+                tree = ast.parse(source)
+            except Exception:
+                continue
+
+            lines = source.splitlines()
+            for node in ast.walk(tree):
+                node_name = None
+                kind = None
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    node_name = node.name
+                    kind = 'async def' if isinstance(node, ast.AsyncFunctionDef) else 'def'
+                elif isinstance(node, ast.ClassDef):
+                    node_name = node.name
+                    kind = 'class'
+
+                if node_name == symbol_name:
+                    ln = node.lineno
+                    signature = lines[ln - 1].strip() if ln <= len(lines) else ''
+                    results.append(
+                        f"📍 [{kind}] {fpath}:{ln}\n   {signature}"
+                    )
+
+    if not results:
+        return f"Không tìm thấy định nghĩa nào cho '{symbol_name}' trong '{directory}'."
+    return (
+        f"=== DEFINITION của [{symbol_name}] ({len(results)} kết quả) ===\n"
+        + "\n\n".join(results)
+    )
+
+
 # Xuất danh sách tools để LangGraph (workflow.py) sử dụng
-coding_tools = [analyze_code_structure, discover_symbols]
+# (replace_tools được import riêng để tránh circular import)
+from .replace_tools import replace_in_file, preview_patch  # noqa: E402
+
+coding_tools = [
+    analyze_code_structure,
+    discover_symbols,
+    find_references,
+    go_to_definition,
+    replace_in_file,
+    preview_patch,
+]

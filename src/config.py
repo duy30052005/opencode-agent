@@ -1,3 +1,6 @@
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 class Settings(BaseSettings):
     GOOGLE_API_KEY: str = Field(default="")
     GOOGLE_API_KEYS: str = Field(default="")
