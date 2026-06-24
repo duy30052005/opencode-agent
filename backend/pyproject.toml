@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opencode"
+version = "0.1.0"
+description = "Backend and CLI tool for OpenCode Agent"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "rich",
+    "typer",
+    "langgraph",
+    "langchain-google-genai",
+    "multilspy"
+]
+
+[project.scripts]
+opencode = "src.cli.__main__:main"
+
+[tool.setuptools]
+packages = ["src", "src.cli", "src.core", "src.nodes", "src.schemas"]

@@ -3,3 +3,4 @@
 __pycache__
 venv
 debug_last_run.json
+opencode.egg-info

@@ -5,13 +5,15 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-def _load_dotenv(path: str = ".env") -> None:
+_BASE_DIR = Path(__file__).resolve().parent.parent
+_DOTENV_PATH = _BASE_DIR / ".env"
+
+def _load_dotenv(path: Path = _DOTENV_PATH) -> None:
     """Hàm tự chế để đọc file .env thủ công (dành cho các hệ điều hành kén dotenv)"""
-    env_path = Path(path)
-    if not env_path.exists():
+    if not path.exists():
         return
 
-    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -39,7 +41,7 @@ class Settings(BaseSettings):
     GITHUB_REPO: str = Field(default="")
 
     # extra="ignore" giúp tránh crash nếu file .env có những biến lạ khác
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_DOTENV_PATH, extra="ignore")
 
 # Khởi tạo đối tượng settings duy nhất để toàn dự án sử dụng
 settings = Settings()
