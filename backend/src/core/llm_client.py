@@ -8,6 +8,11 @@ try:
 except ModuleNotFoundError:
 	ChatGoogleGenerativeAI = None
 
+try:
+	from langchain_groq import ChatGroq  # type: ignore[import-not-found]
+except ModuleNotFoundError:
+	ChatGroq = None
+
 
 from dataclasses import dataclass, field
 from typing import List, Any
@@ -142,40 +147,33 @@ def _generate_fallback_content(prompt: str) -> str:
 
 
 def _build_llm():
-    # 1. Trả về local fallback nếu chưa cài LangChain
-    if ChatGoogleGenerativeAI is None:
-        return _FallbackLLM()
+	groq_api_keys = getattr(settings, "GROQ_API_KEYS", getattr(settings, "GROQ_API_KEY", ""))
+	google_keys_str = getattr(settings, "GOOGLE_API_KEYS", getattr(settings, "GOOGLE_API_KEY", ""))
+	google_api_keys = [key.strip() for key in google_keys_str.split(",") if key.strip()]
 
-    # 2. Lấy chuỗi keys từ settings (Hỗ trợ cả GOOGLE_API_KEYS và GOOGLE_API_KEY cũ)
-    keys_str = getattr(settings, "GOOGLE_API_KEYS", getattr(settings, "GOOGLE_API_KEY", ""))
-    
-    # Tách chuỗi thành mảng các key hợp lệ
-    api_keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+	try:
+		if groq_api_keys and ChatGroq is not None:
+			return ChatGroq(
+				model="qwen/qwen3.6-27b",
+				temperature=0.1,
+			)
 
-    # Trả về local fallback nếu file .env không có key nào
-    if not api_keys:
-        return _FallbackLLM()
+		if google_api_keys and ChatGoogleGenerativeAI is not None:
+			llm_instances = [
+				ChatGoogleGenerativeAI(
+					model="gemini-2.5-flash",
+					temperature=0.1,
+					api_key=key,
+				)
+				for key in google_api_keys
+			]
 
-    try:
-        # 3. Tạo ra một "đội quân" LLM, mỗi LLM cầm 1 key khác nhau
-        llm_instances = [
-            ChatGoogleGenerativeAI(
-                model="gemini-2.5-flash", 
-                temperature=0.1, 
-                api_key=key
-            )
-            for key in api_keys
-        ]
+			if len(llm_instances) > 1:
+				return llm_instances[0].with_fallbacks(llm_instances[1:])
+			return llm_instances[0]
+	except Exception:
+		return _FallbackLLM()
 
-        # 4. Kích hoạt Fallback của LangChain
-        # Nếu LLM[0] bị lỗi (ví dụ: 429 Rate Limit), hệ thống tự động gọi LLM[1], LLM[2]...
-        if len(llm_instances) > 1:
-            return llm_instances[0].with_fallbacks(llm_instances[1:])
-        else:
-            return llm_instances[0]
-            
-    except Exception:
-        # Nếu có bất kỳ lỗi nào khởi tạo, quay về phao cứu sinh Regex
-        return _FallbackLLM()
+	return _FallbackLLM()
 
 llm = _build_llm()

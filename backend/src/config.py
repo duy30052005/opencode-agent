@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     GOOGLE_API_KEYS: str = Field(default="")
     GOOGLE_API_KEY: str = Field(default="")
     
+    GROQ_API_KEY: str = Field(default="")
+    
     # 2. Cấu hình Github (Code của team)
     GITHUB_TOKEN: str = Field(default="")
     GITHUB_OWNER: str = Field(default="")

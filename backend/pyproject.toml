@@ -13,6 +13,7 @@ dependencies = [
     "typer",
     "langgraph",
     "langchain-google-genai",
+    "langchain-groq",
     "multilspy"
 ]
 
