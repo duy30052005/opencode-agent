@@ -1,0 +1,202 @@
+# 🤖 Lightweight OpenCode Agent
+
+**Hệ thống Agent tự viết code → chạy thử → đọc lỗi → sửa code**
+
+Một nền tảng để học sinh hiểu rõ chu trình lập trình: **Write → Test → Debug → Fix**
+
+---
+
+## 📋 Mục Tiêu
+
+Tạo một Agent thông minh giúp học sinh thấy được chi tiết từng bước:
+1. 📝 **Code Generator (Node 1)** - Viết code từ đề bài, dùng 6 tools để phân tích workspace
+2. ▶️ **Code Executor (Node 2)** - Chạy thử code an toàn trong Sandbox subprocess
+3. 🔍 **Critic/Router (Node 3)** - Kiểm tra kết quả, quyết định retry hay kết thúc
+
+---
+
+## 🏗️ Kiến Trúc
+
+```
+[User Input]
+     │
+     ▼
+┌──────────────────┐
+│  1. Generator    │◄──────────────────┐
+└─────────┬────────┘                   │
+          │  Code mới                  │ Sửa
+          ▼                           │
+┌──────────────────┐                   │
+│  2. Executor     │                   │
+└─────────┬────────┘                   │
+          │  Log kết quả / Lỗi         │
+          ▼                           │
+┌──────────────────┐                   │
+│  3. Critic/Router├──(Code lỗi)───────┘
+└─────────┬────────┘
+          │ (Thành công / Hết lượt)
+          ▼
+     [Kết Thúc]
+```
+
+---
+
+## 📂 Cấu Trúc Project (Thực Tế)
+
+```
+Lab2/
+├── pyproject.toml               # 📦 Package config + entry point `mycode`
+├── README.md
+├── audit_log.jsonl              # 🔒 Audit trail cho mọi delivery
+├── run_demo.py                  # Demo runner
+│
+├── docs/
+│   ├── DEVELOPMENT.md
+│   └── SCHEMA.md
+│
+└── src/
+    ├── config.py                # Pydantic Settings (API keys)
+    │
+    ├── schemas/
+    │   ├── agent_state.py       # AgentState TypedDict (LangGraph)
+    │   ├── node_1_schema.py
+    │   └── node_3_schema.py
+    │
+    ├── nodes/
+    │   ├── base_node.py         # BaseNode (ghi history)
+    │   ├── node_1_generator.py  # LLM + 6 tools
+    │   ├── node_2_executor.py   # Subprocess sandbox + test gen
+    │   └── node_3_router.py     # Critic/Router logic
+    │
+    ├── core/
+    │   ├── workflow.py          # LangGraph workflow (3 nodes + conditional edges)
+    │   └── llm_client.py        # Gemini LLM client
+    │
+    ├── tools/                   # FR-05: Tool Simulation Layer
+    │   ├── search_tools.py      # FR-05.1: grep_search
+    │   ├── ast_tools.py         # FR-05.2: discover_symbols, find_references, go_to_definition
+    │   ├── predict_tools.py     # FR-05.3: predict_function_meaning
+    │   └── replace_tools.py     # FR-05.4/5: replace_in_file, preview_patch
+    │
+    ├── delivery/                # FR-06: GitHub MCP Delivery
+    │   ├── orchestrator.py      # FR-06.2: Review → Approve → Push workflow
+    │   ├── review.py            # FR-06.3: AI Review (5 categories)
+    │   ├── approval.py          # FR-06.4: Human Approval gate
+    │   ├── mcp_client.py        # FR-06.1: GitHub MCP integration
+    │   ├── diff.py              # Diff/patch generation
+    │   ├── audit.py             # NFR-06.1: Audit logging
+    │   ├── auth.py              # Token management
+    │   ├── helpers.py           # Review prompt builder
+    │   └── schemas.py           # ReviewReport schema
+    │
+    ├── cli/                     # FR-04: CLI Runtime
+    │   ├── __init__.py          # Version info
+    │   ├── __main__.py          # python -m src.cli
+    │   ├── app.py               # Typer CLI + Interactive mode
+    │   ├── runner.py            # FR-04.3/4: Workspace + Streaming runner
+    │   ├── workspace.py         # FR-04.3: Workspace Awareness
+    │   ├── display.py           # Rich TUI components
+    │   ├── flow_viewer.py       # /flow command — execution history
+    │   ├── patch_viewer.py      # /patch command — diff viewer
+    │   └── themes.py            # Color palette
+    │
+    └── tests/
+        ├── test_node_2.py
+        └── test_node_3.py
+```
+
+---
+
+## 🚀 Cài Đặt & Chạy
+
+### 1. Clone & Setup môi trường
+
+```bash
+git clone https://github.com/duy30052005/opencode-agent.git
+cd Lab2
+
+# Tạo virtual environment
+python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # Linux/Mac
+
+# Cài dependencies
+pip install -e .               # Cài mycode command
+```
+
+### 2. Cấu hình API Keys
+
+```bash
+# Tạo file .env
+GOOGLE_API_KEY=your_gemini_api_key_here
+GITHUB_TOKEN=your_github_token          # Chỉ cần cho FR-06
+GITHUB_OWNER=your_github_username
+GITHUB_REPO=your_repo_name
+```
+
+### 3. Chạy CLI
+
+```bash
+# FR-04.1: Sau khi pip install -e .
+mycode                                   # Interactive mode
+mycode run "Viết hàm tính giai thừa"    # Direct run
+mycode demo                              # Task ngẫu nhiên
+mycode version                           # Xem phiên bản
+mycode config                            # Xem cấu hình
+
+# Hoặc không cài global:
+python -m src.cli
+python -m src.cli run "Yêu cầu của bạn"
+```
+
+### 4. Lệnh trong Interactive Mode
+
+| Lệnh | Mô tả |
+|------|-------|
+| `<yêu cầu>` | Nhập bất kỳ yêu cầu code nào |
+| `demo` | Chạy task ngẫu nhiên |
+| `/flow` | Xem luồng thực thi (AC-02) |
+| `/patch` | Xem patch gần nhất (FR-05.5) |
+| `help` | Hiển thị trợ giúp |
+| `exit` | Thoát |
+
+---
+
+## 🎯 Tính Năng Chính
+
+### Core Agent (FR-01/02/03)
+- ✅ **LangGraph 3-node loop** — Generator → Executor → Router
+- ✅ **Sandbox an toàn** — subprocess + tempfile + timeout 5s
+- ✅ **Max Retries** — Giới hạn 3-5 lần (guardrail)
+- ✅ **AI Test Generation** — LLM tự sinh test case
+- ✅ **Self-Correction History** — Ghi lại lịch sử sửa lỗi
+
+### FR-04: CLI Runtime
+- ✅ **`mycode` command** — `pip install -e .` → gõ `mycode`
+- ✅ **Interactive mode** — Session prompt như terminal agent
+- ✅ **Workspace Awareness** — Detect CWD, git status, file list
+- ✅ **Streaming Output** — Rich Progress real-time
+
+### FR-05: Tool Simulation Layer
+| Tool | FR | Mô tả |
+|------|----|-------|
+| `grep_search` | 05.1 | Tìm kiếm pattern trong workspace |
+| `discover_symbols` | 05.2 | List class/function trong file |
+| `find_references` | 05.2 | Tìm nơi symbol được dùng (LSP sim) |
+| `go_to_definition` | 05.2 | Tìm nơi symbol được định nghĩa |
+| `predict_function_meaning` | 05.3 | AI giải thích ý nghĩa hàm |
+| `replace_in_file` | 05.4 | Sửa file + sinh diff |
+| `preview_patch` | 05.5 | Xem trước thay đổi trước khi ghi |
+
+### FR-06: GitHub MCP Delivery
+- ✅ **GitHub MCP** — Tạo branch, commit, PR tự động
+- ✅ **AI Review** — 5 categories: syntax, security, maintainability, coding_standards, potential_bugs
+- ✅ **Human Approval Gate** — Phải gõ `APPROVED` mới push
+- ✅ **Protected branches** — Block direct push to main/master/production
+- ✅ **Audit Logging** — `audit_log.jsonl` ghi mọi hành động
+
+---
+
+## 📝 License
+
+MIT
